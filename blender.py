@@ -1,15 +1,7 @@
 from PIL import Image
 import glob, os
 from pprint import pprint
-
-
-##
-##image1 = Image.open("DSC_6263t.jpg")
-##image2 = Image.open("DSC_6262t.jpg")
-###comp = Image.composite(image1, image2, mask)
-##alpha = 0.5
-##blend = Image.blend(image1, image2, alpha)
-##blend.save("blend.jpg", "JPEG")
+from itertools import islice
 
 #choose a source directory
 sourcedir = r"C:\B_Py\Blender\source"
@@ -17,12 +9,6 @@ outdir = sourcedir + r"\output"
 if not os.path.exists(outdir):
     os.mkdir( outdir )
 
-
-#choose how many blend steps: s
-steps = 2.0#
-
-#The alpha transitions between each step
-alphaStep = 1.0/steps
 
 #get all relevant images in the dir
 filelist = glob.iglob(sourcedir+r"\*.jpg")
@@ -36,18 +22,16 @@ for infile in filelist:
         #name = str(infile)
         inputs[name] = im
     except IOError:
-        print ( "Cannot load image "+str( infile ) )
+        print ( "Cannot load image '"+str( infile ) )+"'"
 
 # check they are all the same size
 temp_size = ( 0,0 )
 to_remove = []
 for k, v in inputs.iteritems():
     this_size = v.size
-    #print this_size
     if temp_size == ( 0,0 ):
         temp_size = this_size
     if temp_size != this_size:
-        #print "\t\tWARNING!"
         to_remove.append( k )
 
 # remove any that don't match the first one
@@ -67,47 +51,56 @@ img_list = sorted( img_list )
 def get_img(i):
     return inputs[img_list[i]]
 
-count = 0
-for i, img in enumerate( img_list ):
-    #print i, img
-    if i < len(img_list)-1:
-        a = get_img(i)
-        b = get_img(i+1)
-        print i, a
-        print i+1, b
-        a.save( outdir +"\\"+ str(count) + ".jpg" )
+def window(seq, n=2):
+    "Returns a sliding window (of width n) over data from the iterable"
+    "   s -> (s0,s1,...s[n-1]), (s1,s2,...,sn), ...                   "
+    it = iter(seq)
+    result = tuple(islice(it, n))
+    if len(result) == n:
+        yield result
+    for elem in it:
+        result = result[1:] + (elem,)
+        yield result
+
+
+
+def save(img, outdir, count):
+    try:
+        img.save( outdir +"\\"+ str(count) +".jpg" )
         count += 1
-        blended = Image.blend(a, b, 0.5)
-        new_name = str(img_list[i].split(".")[0])+"b."+img_list[i].split(".")[1]
-        print new_name
-        try:
-            blended.save( outdir +"\\"+ str(count) + ".jpg" )
-            count += 1
-        except:
-            print "oops"
-        print "\n"
-    if i == len(img_list)-1:
-        b = get_img(i)
-        b.save( outdir +"\\"+ str(count) + ".jpg" )
-        count += 1
+    except:
+        print "Oops, couldn't save"
+
+    return count
 
 
+# Keep track of the number of files written so they can all have unique names
+file_count = 0
 
-##
-###blend between image[i] and [i+1]...[i+(s-1)]
-##
-###for each step in the blending
-##img1 = imgDict[i]
-##img2 = imgDict[i+steps]
-##for blend in range(steps):
-##    alpha = (float(steps+1))*alphaStep
-##    blended = Image.blend(img1, img2, alpha)
-##    #insert it into dict[(s*i)+1]...[(s*i)+s]
-##    imgDict[(steps*i)+blend] = blended
-##
-##
-###rename all files so they are in numerical order
-##
-##files = glob.glob("*.jpg")
-##for i in range(len(files)-1):
-##    print ( str(files[i])+ " + " +(str(files[i+1])) )
+#choose how many blend steps: s
+steps = 10.0
+
+#The alpha transitions between each step
+alphaStep = 1.0/steps
+
+#sliding window, 2 wide
+w = window( sorted(inputs) )
+for imgs in w:
+    print "Blending between " + str(imgs)
+
+    a = (inputs[imgs[0]])
+    b = (inputs[imgs[1]])
+
+
+    alpha = 0
+    while alpha < 1:
+        # Don't save b (alpha=1), same as a(alpha=0)
+        print "Alpha: " +str(alpha),
+        blended = Image.blend(a, b, alpha)
+        alpha += alphaStep
+        file_count = save(blended, outdir, file_count)
+        print " File: " +str(file_count)
+
+# finally, save the last image
+file_count = save( (inputs[img_list[-1]]), outdir, file_count )
+print "Count: " +str(file_count)
